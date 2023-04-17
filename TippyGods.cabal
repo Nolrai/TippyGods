@@ -26,6 +26,7 @@ source-repository head
 library
   exposed-modules:
       Import
+      Lens
       Run
       Types
       Util
@@ -35,9 +36,15 @@ library
       src
   ghc-options: -Wall -Wcompat -Widentities -Wincomplete-record-updates -Wincomplete-uni-patterns -Wmissing-export-lists -Wmissing-home-modules -Wpartial-fields -Wredundant-constraints
   build-depends:
-      base >=4.11 && <10
-    , rio >=0.1.12.0
-    , cassava >= 0.5.3
+      base >=4.11 && <5
+    , bytestring >=0.11.4.0 && <0.12
+    , cassava ==0.5.*
+    , directory >=1.3.6.2 && <1.4
+    , lens >=5.1.1 && <5.2
+    , pandoc >=2.19.2 && <2.20
+    , rio >=0.1.12.0 && <0.2
+    , template-haskell >=2.18.0.0 && <2.19
+    , text >=1.2.5 && <1.3
   default-language: Haskell2010
 
 executable TippyGods-exe
@@ -49,9 +56,16 @@ executable TippyGods-exe
   ghc-options: -Wall -Wcompat -Widentities -Wincomplete-record-updates -Wincomplete-uni-patterns -Wmissing-export-lists -Wmissing-home-modules -Wpartial-fields -Wredundant-constraints -threaded -rtsopts -with-rtsopts=-N
   build-depends:
       TippyGods
-    , base >=4.11 && <10
+    , base >=4.11 && <5
+    , bytestring >=0.11.4.0 && <0.12
+    , cassava ==0.5.*
+    , directory >=1.3.6.2 && <1.4
+    , lens >=5.1.1 && <5.2
     , optparse-simple
-    , rio >=0.1.12.0
+    , pandoc >=2.19.2 && <2.20
+    , rio >=0.1.12.0 && <0.2
+    , template-haskell >=2.18.0.0 && <2.19
+    , text >=1.2.5 && <1.3
   default-language: Haskell2010
 
 test-suite TippyGods-test
@@ -65,7 +79,14 @@ test-suite TippyGods-test
   ghc-options: -Wall -Wcompat -Widentities -Wincomplete-record-updates -Wincomplete-uni-patterns -Wmissing-export-lists -Wmissing-home-modules -Wpartial-fields -Wredundant-constraints -threaded -rtsopts -with-rtsopts=-N
   build-depends:
       TippyGods
-    , base >=4.11 && <10
+    , base >=4.11 && <5
+    , bytestring >=0.11.4.0 && <0.12
+    , cassava ==0.5.*
+    , directory >=1.3.6.2 && <1.4
     , hspec
-    , rio >=0.1.12.0
+    , lens >=5.1.1 && <5.2
+    , pandoc >=2.19.2 && <2.20
+    , rio >=0.1.12.0 && <0.2
+    , template-haskell >=2.18.0.0 && <2.19
+    , text >=1.2.5 && <1.3
   default-language: Haskell2010
