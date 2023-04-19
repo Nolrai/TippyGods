@@ -7,7 +7,7 @@ module Types where
 
 import Data.ByteString.Lazy qualified as LByteString
 import Data.Csv hiding (Options)
-import RIO
+import RIO hiding (Lens')
 import RIO.Process
 import Lens
 
@@ -36,9 +36,9 @@ data AppData = AppData
   }
 
 data CardCore = CardCore
-  { cardName :: Text,
-    cardCost :: Maybe Int,
-    cardText :: Text
+  { coreName :: Text,
+    coreCost :: Maybe Int,
+    coreText :: Text
   }
 
 data CardRow = CardRow
@@ -55,8 +55,8 @@ data CardType = Location | Action
 
 instance FromNamedRecord CardRow where
   parseNamedRecord r = do
-    (cardName, cardCost, rowInDeck, cardText) <- (,,,) <$> r .: "Name" <*> r .: "Cost" <*> r .: "# in Deck" <*> r .: "Description"
-    return $ CardRow (CardCore cardName cardCost cardText) (fromMaybe 1 rowInDeck)
+    (coreName, coreCost, rowInDeck, coreText) <- (,,,) <$> r .: "Name" <*> r .: "Cost" <*> r .: "# in Deck" <*> r .: "Description"
+    return $ CardRow (CardCore coreName coreCost coreText) (fromMaybe 1 rowInDeck)
 
 data God = God
   { godName :: Text,
@@ -72,3 +72,15 @@ instance FromNamedRecord God where
 
 makeLenses ''App
 makeLenses ''AppData
+makeLenses ''CardCore
+makeLenses ''CardRow
+makeLenses ''Card
+
+cardNameL :: Lens' Card Text
+cardNameL = cardRowL . rowCoreL . coreNameL
+
+cardCostL :: Lens' Card (Maybe Int)
+cardCostL = cardRowL . rowCoreL . coreCostL
+
+cardTextL :: Lens' Card Text
+cardTextL = cardRowL . rowCoreL . coreTextL

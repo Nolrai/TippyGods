@@ -12,8 +12,6 @@ import Data.Csv
 import Data.Text as Text
 import Import hiding (lines, unlines)
 import System.Directory (createDirectoryIfMissing)
-import Text.Pandoc
-import Text.Pandoc.Readers.Odt (readOdt)
 import RIO.Vector qualified as V
 import RIO.Process
 
@@ -62,11 +60,8 @@ localRio f m = do
 writeFiles :: RIO AppData ()
 writeFiles = do
   AppData {..} <- ask
-  logInfo "Converting the template to Pandoc"
-  templatePandoc <- liftIO . runIOorExplode . readOdt def $ appDataTemplate
-  logDebug "Writing the native representation of the template to output.native"
-  text <- liftIO . runIOorExplode . writeNative def $ templatePandoc
-  liftIO $ writeFileUtf8 "output.native" text
+  Just v <- pure Nothing
+  pure v
 
 splitFile :: FilePath -> FilePath -> (FilePath -> FilePath -> FilePath -> RIO App a) -> RIO App a
 splitFile inputFile tempDir' next = do
