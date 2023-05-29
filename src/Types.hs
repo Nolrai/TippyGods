@@ -1,24 +1,25 @@
+{-# LANGUAGE ApplicativeDo #-}
 {-# LANGUAGE ImportQualifiedPost #-}
 {-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE NoImplicitPrelude #-}
+{-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE NoImplicitPrelude #-}
 
 module Types where
 
-import Data.ByteString.Lazy qualified as LByteString
 import Data.Csv hiding (Options)
+import Lens
 import RIO hiding (Lens')
 import RIO.Process
-import Lens
 
 -- | Command line arguments
 data Options = Options
   { optionsVerbose :: Bool,
     optionsInput :: FilePath,
     optionsTempDir :: FilePath,
-    optionsTemplate :: FilePath,
     optionsOutput :: FilePath
   }
+  deriving (Show)
 
 data App = App
   { appLogFunc :: !LogFunc,
@@ -31,8 +32,7 @@ data AppData = AppData
   { appDataApp :: !App,
     appDataActionCards :: ![Card],
     appDataGods :: ![God],
-    appDataLocationCards :: ![Card],
-    appDataTemplate :: !LByteString.ByteString
+    appDataLocationCards :: ![Card]
   }
 
 data CardCore = CardCore
@@ -40,35 +40,40 @@ data CardCore = CardCore
     coreCost :: Maybe Int,
     coreText :: Text
   }
+  deriving (Show)
 
 data CardRow = CardRow
   { rowCore :: CardCore,
     rowInDeck :: Int
   }
+  deriving (Show)
 
 data Card = Card
   { cardRow :: CardRow,
     cardType :: CardType
   }
+  deriving (Show)
 
 data CardType = Location | Action
+  deriving (Show)
 
 instance FromNamedRecord CardRow where
   parseNamedRecord r = do
-    (coreName, coreCost, rowInDeck, coreText) <- (,,,) <$> r .: "Name" <*> r .: "Cost" <*> r .: "# in Deck" <*> r .: "Description"
-    return $ CardRow (CardCore coreName coreCost coreText) (fromMaybe 1 rowInDeck)
+    (coreName, coreCost, rowInDeck', coreText) <- (,,,) <$> getName r <*> r .: "Cost" <*> r .: "# in Deck" <*> getDescription r
+    let rowCore = CardCore {..}
+        rowInDeck = fromMaybe 1 rowInDeck'
+    pure $ CardRow rowCore rowInDeck
+
+getName :: NamedRecord -> Parser Text
+getName r = r .: "Name" <|> r .: "Location" <|> r .: "Action"
+
+getDescription :: NamedRecord -> Parser Text
+getDescription r = r .: "Description" <|> r .: ""
 
 data God = God
   { godName :: Text,
-    godLine1 :: Text,
-    godLine2 :: Text,
-    godLine3 :: Text
-  }
-
--- Not actually used.
-instance FromNamedRecord God where
-  parseNamedRecord r =
-    God <$> r .: "Name" <*> r .: "Line1" <*> r .: "Line2" <*> r .: "Line3"
+    godLines :: [Text]
+  } deriving (Show)
 
 makeLenses ''App
 makeLenses ''AppData

@@ -3,11 +3,15 @@
 -- | Silly utility module, used to demonstrate how to write a test
 -- case.
 module Util
-  ( plus2,
+  ( splitEvery,
   )
 where
 
+import Data.List (splitAt)
 import RIO
 
-plus2 :: Int -> Int
-plus2 = (+ 2)
+splitEvery :: Int -> [a] -> [[a]]
+splitEvery _ [] = []
+splitEvery n xs = front : splitEvery n back
+  where
+    (front, back) = splitAt n xs

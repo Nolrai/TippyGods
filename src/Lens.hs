@@ -4,4 +4,4 @@ import Control.Lens hiding (makeLenses)
 import Language.Haskell.TH
 
 makeLenses :: Name -> DecsQ
-makeLenses = makeLensesWith (set lensField (mappingNamer (pure . (<> "L"))) lensRules )
+makeLenses = makeLensesWith (set lensField (mappingNamer (pure . (<> "L"))) lensRules)

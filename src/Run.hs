@@ -1,19 +1,26 @@
+{-# LANGUAGE BangPatterns #-}
 {-# LANGUAGE ImportQualifiedPost #-}
 {-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE NoImplicitPrelude #-}
 {-# LANGUAGE RecordWildCards #-}
-{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE NoImplicitPrelude #-}
 
 module Run (run) where
 
 import Data.ByteString.Lazy qualified as LByteString
 import Data.Csv
-import Data.Text as Text
+import Data.Text (unlines, isSuffixOf, isPrefixOf, lines)
+import qualified Data.Text as Text hiding (take)
+import Diagrams.Backend.CmdLine
+import Diagrams.Backend.SVG as SVG
+import Diagrams.Backend.SVG.CmdLine ()
+import Diagrams.Prelude (Diagram, Any, V2)
+import Diagrams.Prelude qualified as D
+import Draw (drawCards, drawGods, pageHeight, pageWidth)
 import Import hiding (lines, unlines)
-import System.Directory (createDirectoryIfMissing)
-import RIO.Vector qualified as V
 import RIO.Process
+import RIO.Vector qualified as V
+import System.Directory (createDirectoryIfMissing)
 
 instance HasLogFunc AppData where
   logFuncL = appDataAppL . logFuncL
@@ -28,27 +35,16 @@ run :: RIO App ()
 run = do
   logDebug "We're inside the application!"
   Options {..} <- asks appOptions
-  logInfo
-    ( "Splitting the input file into three parts: "
-        <> displayShow optionsInput
-    )
-  logInfo $ if optionsTempDir == ""
-    then "Using a temporary directory" 
-    else "Using the directory \"" <> displayShow optionsTempDir <> "\" as a temporary directory"
+  logInfo $ "Splitting the input file into three parts: " <> displayShow optionsInput
   (locationCards, actionCards, gods) <- splitFile optionsInput optionsTempDir readCSVSections
 
-  logDebug "Reading the template"
-  template <- liftIO $ LByteString.readFile optionsTemplate
-
-  let
-    appData :: App -> AppData 
-    appData app =
+  let appData :: App -> AppData
+      appData app =
         AppData
           { appDataApp = app,
             appDataActionCards = actionCards,
             appDataGods = gods,
-            appDataLocationCards = locationCards,
-            appDataTemplate = template
+            appDataLocationCards = locationCards
           }
   localRio appData writeFiles
 
@@ -57,14 +53,28 @@ localRio f m = do
   r <- ask
   liftIO $ runRIO (f r) m
 
+pageSizeSpec :: D.SizeSpec V2 Double
+pageSizeSpec = D.mkSizeSpec2D (Just $ pageWidth * 100) (Just $ pageHeight * 100)
+
 writeFiles :: RIO AppData ()
 writeFiles = do
   AppData {..} <- ask
-  Just v <- pure Nothing
-  pure v
+  let Options {..} = appOptions appDataApp
+  logInfo $ "Writing the output file to " <> displayShow optionsOutput
+  logInfo $ "Writing " <> displayShow (Import.length appDataActionCards) <> " cards and " <> displayShow (Import.length appDataGods) <> "gods to " <> displayShow optionsOutput
+  let pages = drawPages appDataActionCards appDataGods appDataLocationCards :: [Diagram SVG]
+  logInfo $ "Writing " <> displayShow (Import.length pages) <> " pages to " <> displayShow optionsOutput
+  liftIO $ mapM_ (\ (n, p) -> SVG.renderSVG (show n <> "_" <> optionsOutput) pageSizeSpec p) $ zip [0 ..] pages
+
+drawPages :: [Card] -> [God] -> [Card] -> [Diagram SVG]
+drawPages l1 l2 l3 = (drawCards <$> splitEvery 9 (l1 ++ l3)) ++ (drawGods <$> splitEvery 9 l2)
 
 splitFile :: FilePath -> FilePath -> (FilePath -> FilePath -> FilePath -> RIO App a) -> RIO App a
 splitFile inputFile tempDir' next = do
+  logInfo $
+    if tempDir' == ""
+      then "Using a temporary directory"
+      else "Using the directory " <> displayShow tempDir' <> " as a temporary directory"
   let withTempDir = if tempDir' == "" then withSystemTempDirectory "" else withTempDir'
   withTempDir $ \tempDir -> do
     inputLines <- lines <$> readFileUtf8 inputFile
@@ -93,15 +103,22 @@ splitFile inputFile tempDir' next = do
 
 readCSVSections :: FilePath -> FilePath -> FilePath -> RIO App ([Card], [Card], [God])
 readCSVSections actionFile godFile locationFile = do
-  actionCards <- decodeCards Action actionFile
-  gods <- decodeGods godFile
   locationCards <- decodeCards Location locationFile
-  pure (locationCards, actionCards, gods)
+  logInfo $ "Read " <> displayShow (Import.length locationCards) <> " location cards"
+  actionCards <- decodeCards Action actionFile
+  logInfo $ "Read " <> displayShow (Import.length actionCards) <> " action cards"
+  gods <- decodeGods godFile
+  logInfo $ "Read " <> displayShow (Import.length gods) <> " gods"
+  pure (take 1 locationCards, take 1 actionCards, take 1 gods)
 
 decodeCards :: CardType -> FilePath -> RIO App [Card]
 decodeCards cardType file = do
   (rows :: [CardRow]) <- decodeFile file
-  rows `forM` \ cardRow -> pure Card {..} 
+  cards <- rows `forM` \cardRow -> pure Card {..}
+  pure $ Import.filter (\ a -> notNull (a ^. cardNameL) && notNull (a ^. cardTextL) ) cards
+  where
+    notNull :: Text -> Bool
+    notNull = not . Text.null
 
 decodeFile :: FromNamedRecord a => FilePath -> RIO App [a]
 decodeFile file = do
@@ -112,27 +129,33 @@ decodeFile file = do
     Left err -> throwString err
     Right (_, v) -> pure $ V.toList v
 
-decodeGods :: FilePath -> RIO App [God]
+decodeGods :: HasLogFunc app => FilePath -> RIO app [God]
 decodeGods file = do
   logDebug $ "Reading file " <> displayShow file
   (csvData :: LByteString.ByteString) <- liftIO $ LByteString.readFile file
   logDebug $ "Parsing file " <> displayShow file
-  let
-    v :: Vector (Vector Text) 
-    Right v = decode NoHeader csvData
-    text :: Vector Text
-    Just text = V.sequence $ V.map (V.!? 3) v
-  toGods (V.filter Text.null text)
+  let v :: Vector (Vector Text)
+      Right v = decode NoHeader csvData
+      text :: Vector Text
+      Just text = V.sequence $ V.map (V.!? 3) v
+  logDebug $ "god text: " <> displayShow text
+  toGods text
 
-toGods :: MonadFail m => Vector Text -> m [God]
-toGods v
-  | V.null v = pure []
-  | otherwise = do
-    let
-      front = V.take 4 v
-      rest = V.drop 4 v
-      [godName, godLine1, godLine2, godLine3] = V.toList front
-    (God {..} :) <$> toGods rest
+toGods :: HasLogFunc app => Vector Text -> RIO app [God]
+toGods v = 
+  V.toList <$> V.mapM toGod (splitWhere Text.null v)
 
-instance MonadFail (RIO app) where
-  fail = throwString
+splitWhere :: (a -> Bool) -> Vector a -> Vector (Vector a)
+splitWhere f v = 
+  let (a, b) = V.break f v
+  in if V.null b then V.singleton a else a `V.cons` splitWhere f (V.drop 1 b)
+
+toGod :: HasLogFunc app => Vector Text -> RIO app God
+toGod v = do
+  logDebug $ "Parsing god: " <> displayShow v
+  let 
+    Just godName = v V.!? 0
+    godLines = V.toList $ V.drop 1 v
+    god = God {..}
+  logDebug $ "Parsed god: " <> displayShow god
+  pure god
